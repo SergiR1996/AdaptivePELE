@@ -26,6 +26,15 @@ try:
 except NameError:
     basestring = str
 
+# Mapping from string names to OpenMM implicit solvent model objects
+IMPLICIT_SOLVENT_MODELS = {
+    "HCT": app.HCT,
+    "OBC1": app.OBC1,
+    "OBC2": app.OBC2,
+    "GBn": app.GBn,
+    "GBn2": app.GBn2,
+}
+
 
 def get_traceback(f):
     @functools.wraps(f)
@@ -320,8 +329,14 @@ def minimization(prmtop, inpcrd, PLATFORM, constraints, parameters, platformProp
         ligandNames = []
     else:
         ligandNames = parameters.ligandName
-    system = prmtop.createSystem(nonbondedMethod=app.PME,
-                                 nonbondedCutoff=parameters.nonBondedCutoff * unit.angstroms, constraints=app.HBonds)
+    if parameters.implicitSolvent is not None:
+        implicit_model = IMPLICIT_SOLVENT_MODELS[parameters.implicitSolvent]
+        system = prmtop.createSystem(nonbondedMethod=app.NoCutoff,
+                                     implicitSolvent=implicit_model,
+                                     constraints=app.HBonds)
+    else:
+        system = prmtop.createSystem(nonbondedMethod=app.PME,
+                                     nonbondedCutoff=parameters.nonBondedCutoff * unit.angstroms, constraints=app.HBonds)
     integrator = mm.VerletIntegrator(parameters.timeStep * unit.femtoseconds)
     if parameters.constraints is not None:
         # Add the specified constraints to the system
@@ -333,7 +348,8 @@ def minimization(prmtop, inpcrd, PLATFORM, constraints, parameters, platformProp
         addDummyAtomToSystem(system, prmtop.topology, inpcrd.positions, ligandNames, dummy, 3)
     if constraints:
         # Add positional restraints to protein backbone
-        force = mm.CustomExternalForce(str("k*periodicdistance(x, y, z, x0, y0, z0)^2"))
+        distance_expr = str("k*distance(x, y, z, x0, y0, z0)^2") if parameters.implicitSolvent is not None else str("k*periodicdistance(x, y, z, x0, y0, z0)^2")
+        force = mm.CustomExternalForce(distance_expr)
         force.addGlobalParameter(str("k"), constraints * unit.kilocalories_per_mole / unit.angstroms ** 2)
         force.addPerParticleParameter(str("x0"))
         force.addPerParticleParameter(str("y0"))
@@ -396,9 +412,15 @@ def NVTequilibration(topology, positions, PLATFORM, simulation_steps, constraint
     if temperature is None:
         temperature = parameters.Temperature
 
-    system = topology.createSystem(nonbondedMethod=app.PME,
-                                   nonbondedCutoff=parameters.nonBondedCutoff * unit.angstroms,
-                                   constraints=app.HBonds)
+    if parameters.implicitSolvent is not None:
+        implicit_model = IMPLICIT_SOLVENT_MODELS[parameters.implicitSolvent]
+        system = topology.createSystem(nonbondedMethod=app.NoCutoff,
+                                       implicitSolvent=implicit_model,
+                                       constraints=app.HBonds)
+    else:
+        system = topology.createSystem(nonbondedMethod=app.PME,
+                                       nonbondedCutoff=parameters.nonBondedCutoff * unit.angstroms,
+                                       constraints=app.HBonds)
     system.addForce(mm.AndersenThermostat(temperature * unit.kelvin, 1 / unit.picosecond))
     integrator = mm.VerletIntegrator(parameters.timeStep * unit.femtoseconds)
     if parameters.constraints is not None:
@@ -410,7 +432,8 @@ def NVTequilibration(topology, positions, PLATFORM, simulation_steps, constraint
         addDummyAtomToSystem(system, topology.topology, positions, ligandNames, dummy, 3)
 
     if constraints:
-        force = mm.CustomExternalForce(str("k*periodicdistance(x, y, z, x0, y0, z0)^2"))
+        distance_expr = str("k*distance(x, y, z, x0, y0, z0)^2") if parameters.implicitSolvent is not None else str("k*periodicdistance(x, y, z, x0, y0, z0)^2")
+        force = mm.CustomExternalForce(distance_expr)
         force.addGlobalParameter(str("k"), constraints * unit.kilocalories_per_mole / unit.angstroms ** 2)
         force.addPerParticleParameter(str("x0"))
         force.addPerParticleParameter(str("y0"))
@@ -428,9 +451,10 @@ def NVTequilibration(topology, positions, PLATFORM, simulation_steps, constraint
     root, _ = os.path.splitext(reportName)
     reportFile = f"%s_report_NVT_temp_{int(temperature)}" % root
     report_freq = int(min(parameters.reporterFreq, simulation_steps/4))
+    report_volume = parameters.implicitSolvent is None
     simulation.reporters.append(CustomStateDataReporter(reportFile, report_freq, step=True,
                                                         potentialEnergy=True, temperature=True, time_sim=True,
-                                                        volume=True, remainingTime=True, speed=True,
+                                                        volume=report_volume, remainingTime=True, speed=True,
                                                         totalSteps=parameters.equilibrationLengthNVT, separator="\t",
                                                         append=continueReport, initialStep=lastStep,
                                                         initialTime=lastSimTime))
@@ -543,12 +567,19 @@ def NPTequilibration(topology, positions, PLATFORM, simulation_steps, constraint
         ligandNames = []
     else:
         ligandNames = parameters.ligandName
-    system = topology.createSystem(nonbondedMethod=app.PME,
-                                   nonbondedCutoff=parameters.nonBondedCutoff * unit.angstroms,
-                                   constraints=app.HBonds)
+    if parameters.implicitSolvent is not None:
+        implicit_model = IMPLICIT_SOLVENT_MODELS[parameters.implicitSolvent]
+        system = topology.createSystem(nonbondedMethod=app.NoCutoff,
+                                       implicitSolvent=implicit_model,
+                                       constraints=app.HBonds)
+    else:
+        system = topology.createSystem(nonbondedMethod=app.PME,
+                                       nonbondedCutoff=parameters.nonBondedCutoff * unit.angstroms,
+                                       constraints=app.HBonds)
     system.addForce(mm.AndersenThermostat(parameters.Temperature * unit.kelvin, 1 / unit.picosecond))
     integrator = mm.VerletIntegrator(parameters.timeStep * unit.femtoseconds)
-    system.addForce(mm.MonteCarloBarostat(1 * unit.bar, parameters.Temperature * unit.kelvin))
+    if parameters.implicitSolvent is None:
+        system.addForce(mm.MonteCarloBarostat(1 * unit.bar, parameters.Temperature * unit.kelvin))
     if parameters.constraints is not None:
         # Add the specified constraints to the system
         addConstraints(system, topology.topology, parameters.constraints)
@@ -558,7 +589,8 @@ def NPTequilibration(topology, positions, PLATFORM, simulation_steps, constraint
         addDummyAtomToSystem(system, topology.topology, positions, ligandNames, dummy, 3)
 
     if constraints:
-        force = mm.CustomExternalForce(str("k*periodicdistance(x, y, z, x0, y0, z0)^2"))
+        distance_expr = str("k*distance(x, y, z, x0, y0, z0)^2") if parameters.implicitSolvent is not None else str("k*periodicdistance(x, y, z, x0, y0, z0)^2")
+        force = mm.CustomExternalForce(distance_expr)
         force.addGlobalParameter(str("k"), constraints * unit.kilocalories_per_mole / unit.angstroms ** 2)
         force.addPerParticleParameter(str("x0"))
         force.addPerParticleParameter(str("y0"))
@@ -576,9 +608,10 @@ def NPTequilibration(topology, positions, PLATFORM, simulation_steps, constraint
     root, _ = os.path.splitext(reportName)
     reportFile = f"%s_report_NPT_constr_{round(constraints,2)}" % root
     report_freq = int(min(parameters.reporterFreq, simulation_steps/4))
+    report_volume = parameters.implicitSolvent is None
     simulation.reporters.append(CustomStateDataReporter(reportFile, report_freq, step=True,
                                                         potentialEnergy=True, temperature=True, time_sim=True,
-                                                        volume=True, remainingTime=True, speed=True,
+                                                        volume=report_volume, remainingTime=True, speed=True,
                                                         totalSteps=parameters.equilibrationLengthNPT, separator="\t",
                                                         append=continueReport, initialStep=lastStep,
                                                         initialTime=lastSimTime))
@@ -726,15 +759,22 @@ def runProductionSimulation(equilibrationFiles, workerNumber, outputDir, seed, p
         positions = min_sim.context.getState(getPositions=True).getPositions()
     else:
         positions = pdb.positions
-    system = prmtop.createSystem(nonbondedMethod=app.PME,
-                                 nonbondedCutoff=parameters.nonBondedCutoff * unit.angstroms,
-                                 constraints=app.HBonds, removeCMMotion=True)
+    if parameters.implicitSolvent is not None:
+        implicit_model = IMPLICIT_SOLVENT_MODELS[parameters.implicitSolvent]
+        system = prmtop.createSystem(nonbondedMethod=app.NoCutoff,
+                                     implicitSolvent=implicit_model,
+                                     constraints=app.HBonds, removeCMMotion=True)
+    else:
+        system = prmtop.createSystem(nonbondedMethod=app.PME,
+                                     nonbondedCutoff=parameters.nonBondedCutoff * unit.angstroms,
+                                     constraints=app.HBonds, removeCMMotion=True)
     if parameters.boxCenter or parameters.cylinderBases:
         addDummyAtomToSystem(system, prmtop.topology, positions, ligandNames, dummies, deviceIndex)
 
     system.addForce(mm.AndersenThermostat(parameters.Temperature * unit.kelvin, 1 / unit.picosecond))
     integrator = mm.VerletIntegrator(parameters.timeStep * unit.femtoseconds)
-    system.addForce(mm.MonteCarloBarostat(1 * unit.bar, parameters.Temperature * unit.kelvin))
+    if parameters.implicitSolvent is None:
+        system.addForce(mm.MonteCarloBarostat(1 * unit.bar, parameters.Temperature * unit.kelvin))
     if parameters.constraints is not None:
         # Add the specified constraints to the system
         addConstraints(system, prmtop.topology, parameters.constraints)
@@ -766,9 +806,10 @@ def runProductionSimulation(equilibrationFiles, workerNumber, outputDir, seed, p
         simulation.reporters.append(app.DCDReporter(str(trajName), parameters.reporterFreq, append=restart, enforcePeriodicBox=parameters.postprocessing))
 
     simulation.reporters.append(app.CheckpointReporter(str(checkpointReporter), parameters.reporterFreq))
+    report_volume = parameters.implicitSolvent is None
     simulation.reporters.append(CustomStateDataReporter(stateData, parameters.reporterFreq, step=True,
                                                         potentialEnergy=True, temperature=True, time_sim=True,
-                                                        volume=True, remainingTime=True, speed=True,
+                                                        volume=report_volume, remainingTime=True, speed=True,
                                                         totalSteps=simulation_length, separator="\t",
                                                         append=restart, initialStep=lastStep))
 

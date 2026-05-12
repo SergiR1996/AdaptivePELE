@@ -200,6 +200,8 @@ class SimulationParams:
     sphere = "sphere"
     postprocessing = "postprocessing"
     ligandsToRestrict = "ligandsToRestrict"
+    implicitSolvent = "implicitSolvent"
+    implicitSolventModels = ("HCT", "OBC1", "OBC2", "GBn", "GBn2")
 
 
 class ExitConditionType:

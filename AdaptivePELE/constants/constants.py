@@ -84,6 +84,19 @@ class AmberTemplates:
                     "saveamberparm COMPLX $PRMTOP $INPCRD\n" \
                     "savepdb COMPLX $SOLVATED_PDB\n" \
                     "quit"
+    tleapTemplateImplicitSolvent = "source $FORCEFIELD\n" \
+                                   "source leaprc.gaff\n" \
+                                   "$MODIFIED_RES " \
+                                   "$LIGANDS " \
+                                   "$DUM " \
+                                   "$COFACTORS " \
+                                   "COMPLX = loadpdb $COMPLEX\n" \
+                                   "$BONDS " \
+                                   "addIons2 COMPLX Cl- 0\n" \
+                                   "addIons2 COMPLX Na+ 0\n" \
+                                   "saveamberparm COMPLX $PRMTOP $INPCRD\n" \
+                                   "savepdb COMPLX $SOLVATED_PDB\n" \
+                                   "quit"
     DUM_atom = "DUM"
     DUM_res = "DUM"
     DUM_prep = "  0  0  0\n" \

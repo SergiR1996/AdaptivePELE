@@ -120,6 +120,7 @@ class SimulationParameters:
         self.boxType = None
         self.cylinderBases = None
         self.postprocessing = False
+        self.implicitSolvent = None
 
 
 class SimulationRunner:
@@ -921,8 +922,12 @@ class MDSimulation(SimulationRunner):
         self.type = simulationTypes.SIMULATION_TYPE.MD
         self.antechamberTemplate = constants.AmberTemplates.antechamberTemplate
         self.parmchkTemplate = constants.AmberTemplates.parmchk2Template
-        self.tleapTemplate = constants.AmberTemplates.tleapTemplate
-        self.tleapTemplateVolume = constants.AmberTemplates.tleapTemplateVolume
+        if parameters.implicitSolvent is not None:
+            self.tleapTemplate = constants.AmberTemplates.tleapTemplateImplicitSolvent
+            self.tleapTemplateVolume = None
+        else:
+            self.tleapTemplate = constants.AmberTemplates.tleapTemplate
+            self.tleapTemplateVolume = constants.AmberTemplates.tleapTemplateVolume
         self.prmtopFiles = []
         self.restart = False
 
@@ -1082,16 +1087,6 @@ class MDSimulation(SimulationRunner):
             inpcrd = os.path.join(workingdirectory, equilibrationOutput, "system_%d.inpcrd" % i)
             finalPDB = os.path.join(workingdirectory, equilibrationOutput, "system_%d.pdb" % i)
             Tleapdict["FORCEFIELD"] = constants.AmberTemplates.forcefields[self.parameters.forcefield]
-
-            Tleapdict["BOXSIZE"] = pdb.compute_water_box(waterBoxSize=self.parameters.waterBoxSize,
-                                                         boxCenter=self.parameters.boxCenter,
-                                                         boxRadius=self.parameters.boxRadius,
-                                                         isCubicBox=self.parameters.useCubicBox)
-            if self.parameters.useCubicBox:
-                Tleapdict["BOXTYPE"] = "solvatebox"
-            else:
-                # Octahedral box
-                Tleapdict["BOXTYPE"] = "solvateoct"
             Tleapdict["COMPLEX"] = structure
             Tleapdict["PRMTOP"] = prmtop
             Tleapdict["INPCRD"] = inpcrd
@@ -1116,27 +1111,45 @@ class MDSimulation(SimulationRunner):
             if self.parameters.boxCenter or self.parameters.cylinderBases:
                 Tleapdict["DUM"] = "loadamberprep %s.prep\nloadamberparams %s.frcmod\n" % (constants.AmberTemplates.DUM_res, constants.AmberTemplates.DUM_res)
 
-            # Using tleap to compute the volume of the box
-            self.makeWorkingControlFile(TleapVolControlFile, Tleapdict, self.tleapTemplateVolume)
-            self.runTleap(TleapVolControlFile)
-            # Extract the volume of the box
-            with open("leap.log", "r") as f:
-                for line in f:
-                    if "Volume:" in line:
-                        volume = float(line.split()[1])
-                        print("Volume of the box: %.2f" % volume)
-                        break
-            # Compute number of ions based on the volume of the box
-            Tleapdict["ADDIONS"] = self.calculateNumberofIons(self.parameters.saltConcentration, volume)
+            if self.parameters.implicitSolvent is not None:
+                # Implicit solvent: skip solvation and volume-based ion calculation.
+                # Only neutralise the system with addIons2 ... 0 (handled in the template).
+                self.makeWorkingControlFile(TleapControlFile, Tleapdict, self.tleapTemplate)
+                self.runTleap(TleapControlFile)
+                shutil.copy("leap.log", os.path.join(workingdirectory, equilibrationOutput, "leap_%d.log" % i))
+                shutil.copy(TleapControlFile, os.path.join(workingdirectory, equilibrationOutput, TleapControlFile))
+            else:
+                # Explicit solvent: compute box, run volume tleap, add salt ions, then solvate.
+                Tleapdict["BOXSIZE"] = pdb.compute_water_box(waterBoxSize=self.parameters.waterBoxSize,
+                                                             boxCenter=self.parameters.boxCenter,
+                                                             boxRadius=self.parameters.boxRadius,
+                                                             isCubicBox=self.parameters.useCubicBox)
+                if self.parameters.useCubicBox:
+                    Tleapdict["BOXTYPE"] = "solvatebox"
+                else:
+                    Tleapdict["BOXTYPE"] = "solvateoct"
 
-            shutil.copy("leap.log", os.path.join(workingdirectory, equilibrationOutput, "leapVolume_%d.log" % i))
-            os.remove("leap.log")  # Remove the log file to avoid appending to it
+                # Using tleap to compute the volume of the box
+                self.makeWorkingControlFile(TleapVolControlFile, Tleapdict, self.tleapTemplateVolume)
+                self.runTleap(TleapVolControlFile)
+                # Extract the volume of the box
+                with open("leap.log", "r") as f:
+                    for line in f:
+                        if "Volume:" in line:
+                            volume = float(line.split()[1])
+                            print("Volume of the box: %.2f" % volume)
+                            break
+                # Compute number of ions based on the volume of the box
+                Tleapdict["ADDIONS"] = self.calculateNumberofIons(self.parameters.saltConcentration, volume)
 
-            # tleap file to solvate the system and add ions
-            self.makeWorkingControlFile(TleapControlFile, Tleapdict, self.tleapTemplate)
-            self.runTleap(TleapControlFile)
-            shutil.copy("leap.log", os.path.join(workingdirectory, equilibrationOutput, "leap_%d.log" % i))
-            shutil.copy(TleapControlFile, os.path.join(workingdirectory, equilibrationOutput, TleapControlFile))
+                shutil.copy("leap.log", os.path.join(workingdirectory, equilibrationOutput, "leapVolume_%d.log" % i))
+                os.remove("leap.log")  # Remove the log file to avoid appending to it
+
+                # tleap file to solvate the system and add ions
+                self.makeWorkingControlFile(TleapControlFile, Tleapdict, self.tleapTemplate)
+                self.runTleap(TleapControlFile)
+                shutil.copy("leap.log", os.path.join(workingdirectory, equilibrationOutput, "leap_%d.log" % i))
+                shutil.copy(TleapControlFile, os.path.join(workingdirectory, equilibrationOutput, TleapControlFile))
             solvatedStrcutures.append(finalPDB)
             if not os.path.isfile(inpcrd):
                 raise FileNotFoundError("Error While running Tleap, check %s/leap_%d.log for more information." %
@@ -1652,6 +1665,16 @@ class RunnerBuilder:
             params.cofactors = paramsBlock.get(blockNames.SimulationParams.cofactors)
             params.constraints = paramsBlock.get(blockNames.SimulationParams.constraints)
             params.postprocessing = paramsBlock.get(blockNames.SimulationParams.postprocessing, True)
+            params.implicitSolvent = paramsBlock.get(blockNames.SimulationParams.implicitSolvent)
+            if params.implicitSolvent is not None:
+                valid_models = blockNames.SimulationParams.implicitSolventModels
+                if params.implicitSolvent not in valid_models:
+                    raise utilities.ImproperParameterValueException(
+                        "Unknown implicit solvent model '%s'. Supported models are: %s" % (
+                            params.implicitSolvent, ", ".join(valid_models)))
+                if params.boxCenter is not None or params.cylinderBases is not None:
+                    raise utilities.ImproperParameterValueException(
+                        "Implicit solvent is not compatible with box restraints (boxCenter/cylinderBases).")
             if params.ligandName is None and (params.boxCenter is not None or params.cylinderBases is not None):
                 raise utilities.ImproperParameterValueException("Ligand name is necessary to establish the box")
             if params.ligandsToRestrict is None and (params.boxCenter is not None or params.cylinderBases is not None):

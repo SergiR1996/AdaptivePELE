@@ -192,6 +192,7 @@ class SimulationParams:
         "productionLength": "numbers.Real",
         "WaterBoxSize": "numbers.Real",
         "forcefield": "basestring",
+        "implicitSolvent": "basestring",
         "trajectoriesPerReplica": "numbers.Real",
         "temperatureStepNVTEquilibration": "numbers.Real",
         "initialTemperatureNVTEquilibration": "numbers.Real",
