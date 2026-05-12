@@ -1109,6 +1109,9 @@ class MDSimulation(SimulationRunner):
                     elif blockNames.CofactorTemplateNames.nad in cof:
                         Tleapdict["COFACTORS"] += "loadamberprep {}{}.prep\n".format(COFACTOR_PATH, cof)
                         Tleapdict["COFACTORS"] += "loadamberparams {}{}.frcmod\n".format(COFACTOR_PATH, cof)
+                    elif blockNames.CofactorTemplateNames.nadph in cof:
+                        Tleapdict["COFACTORS"] += "loadamberprep {}{}.prep\n".format(COFACTOR_PATH, cof)
+                        Tleapdict["COFACTORS"] += "loadamberparams {}{}.frcmod\n".format(COFACTOR_PATH, cof)
             Tleapdict["MODIFIED_RES"] = pdb.getModifiedResiduesTleapTemplate()
             if self.parameters.boxCenter or self.parameters.cylinderBases:
                 Tleapdict["DUM"] = "loadamberprep %s.prep\nloadamberparams %s.frcmod\n" % (constants.AmberTemplates.DUM_res, constants.AmberTemplates.DUM_res)

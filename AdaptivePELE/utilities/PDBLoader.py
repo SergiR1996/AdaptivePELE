@@ -34,7 +34,7 @@ class PDBManager:
                  "Nd", "PB", "PD", "PR", "PT", "Pu", "RB", "Ra", "SM", "SR", "Sm", "Sn", "TB", "TL", "Th",
                  "Tl", "Tm", "U4+", "V2+", "Y", "YB2", "ZN", "Zr"}
 
-    VALID_COFACTOR = {"NAD","NAP","FAD","FMN"}
+    VALID_COFACTOR = {"NAD","NAP","FAD","FMN","NPD","NPH"}
 
     VALID_WATER_ATOMS = set(["H1", "H2", "O"])
     WATERS = ["WAT", "HOH"]

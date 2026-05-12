@@ -229,3 +229,4 @@ class CofactorTemplateNames:
     fadh = "fadh-"
     fmn = "fmn"
     nad = "nad"
+    nadph = "nadph"
