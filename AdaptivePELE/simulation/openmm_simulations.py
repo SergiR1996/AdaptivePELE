@@ -348,7 +348,7 @@ def minimization(prmtop, inpcrd, PLATFORM, constraints, parameters, platformProp
         addDummyAtomToSystem(system, prmtop.topology, inpcrd.positions, ligandNames, dummy, 3)
     if constraints:
         # Add positional restraints to protein backbone
-        distance_expr = str("k*distance(x, y, z, x0, y0, z0)^2") if parameters.implicitSolvent is not None else str("k*periodicdistance(x, y, z, x0, y0, z0)^2")
+        distance_expr = str("k*((x-x0)^2+(y-y0)^2+(z-z0)^2)") if parameters.implicitSolvent is not None else str("k*periodicdistance(x, y, z, x0, y0, z0)^2")
         force = mm.CustomExternalForce(distance_expr)
         force.addGlobalParameter(str("k"), constraints * unit.kilocalories_per_mole / unit.angstroms ** 2)
         force.addPerParticleParameter(str("x0"))
@@ -432,7 +432,7 @@ def NVTequilibration(topology, positions, PLATFORM, simulation_steps, constraint
         addDummyAtomToSystem(system, topology.topology, positions, ligandNames, dummy, 3)
 
     if constraints:
-        distance_expr = str("k*distance(x, y, z, x0, y0, z0)^2") if parameters.implicitSolvent is not None else str("k*periodicdistance(x, y, z, x0, y0, z0)^2")
+        distance_expr = str("k*((x-x0)^2+(y-y0)^2+(z-z0)^2)") if parameters.implicitSolvent is not None else str("k*periodicdistance(x, y, z, x0, y0, z0)^2")
         force = mm.CustomExternalForce(distance_expr)
         force.addGlobalParameter(str("k"), constraints * unit.kilocalories_per_mole / unit.angstroms ** 2)
         force.addPerParticleParameter(str("x0"))
@@ -589,7 +589,7 @@ def NPTequilibration(topology, positions, PLATFORM, simulation_steps, constraint
         addDummyAtomToSystem(system, topology.topology, positions, ligandNames, dummy, 3)
 
     if constraints:
-        distance_expr = str("k*distance(x, y, z, x0, y0, z0)^2") if parameters.implicitSolvent is not None else str("k*periodicdistance(x, y, z, x0, y0, z0)^2")
+        distance_expr = str("k*((x-x0)^2+(y-y0)^2+(z-z0)^2)") if parameters.implicitSolvent is not None else str("k*periodicdistance(x, y, z, x0, y0, z0)^2")
         force = mm.CustomExternalForce(distance_expr)
         force.addGlobalParameter(str("k"), constraints * unit.kilocalories_per_mole / unit.angstroms ** 2)
         force.addPerParticleParameter(str("x0"))

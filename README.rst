@@ -35,11 +35,19 @@ Improvements in MDSimulation workflow, particularly in the equilibration step.
 - *Previous*:
     - It only neutralized the system adding counter ions.
 - *Current*:
-    - It adds counter ions to neutralize the system, and computes how many Na+ and Cl- are needed to reach a specific `saltConcentration` (eg. 0.15M).
+    - It adds counter ions to neutralize the system, and computes how many Na+ and Cl- are needed to reach a specific ``saltConcentration`` (eg. 0.15M).
     - To compute the number of ions needed, we run tleap twice: the first time to solvate the system and extract the volume from the leap.log; the second time to set the correct number of Na+ and Cl- ions.
     - **Warnings:**
         - Adding ions significantly increases tleap running time (ie. to place ~60 ions needs ~1h of computation)
-        
+
+**Solvent Models**
+
+- *Previous*:
+    - It only allowed to simulate with explicit solvent.
+- *Current*:
+    - It allows to run in both implicit and explicit solvents.
+    - The implicit solvent models (``implicitSolvent``) are the following: ``HCT``, ``OBC1``, ``OBC2``, ``GBn``, and ``GBn2`` 
+
 **Covalent ligands**
 
 - *Previous*:
@@ -80,12 +88,17 @@ To control these behaviours using the control_file, we included the following si
     - DEPRECATED ``constraintsNPT``: This parameter from the original implementation is no longer used, so I removed it.
 
 - **Salt Concentration**
-    - `saltConcentration`: Salt concentration to be set up in the topology by adding Na+ and Cl- ions, after neutralizing the system.
+    - ``saltConcentration``: Salt concentration to be set up in the topology by adding Na+ and Cl- ions, after neutralizing the system.
 
         - Default: 0 (type ``float``)
 
+- **implicitSolvent**
+    - ``implicitSolvent``: Implicit solvent model to use in the system (if not specified, it will use explicit solvent by default)
+
+        - Default: None (type ``string``)
+
 - **Box type**
-    - `useCubicBox`: If True, the box will be cubic, if False, the box will be octahedral. *Note*: Octahedral box is still in development.
+    - ``useCubicBox``: If True, the box will be cubic, if False, the box will be octahedral. *Note*: Octahedral box is still in development.
 
         - Default: True (type ``bool``)
 

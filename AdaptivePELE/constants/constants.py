@@ -86,12 +86,13 @@ class AmberTemplates:
                     "quit"
     tleapTemplateImplicitSolvent = "source $FORCEFIELD\n" \
                                    "source leaprc.gaff\n" \
+                                   "source leaprc.water.tip3p\n" \
                                    "$MODIFIED_RES " \
                                    "$LIGANDS " \
                                    "$DUM " \
                                    "$COFACTORS " \
                                    "COMPLX = loadpdb $COMPLEX\n" \
-                                   "$BONDS " \
+                                   "$BONDS\n" \
                                    "addIons2 COMPLX Cl- 0\n" \
                                    "addIons2 COMPLX Na+ 0\n" \
                                    "saveamberparm COMPLX $PRMTOP $INPCRD\n" \
